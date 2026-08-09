@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# runtime state / ledgers / audit (never commit)
+*.sqlite
+*.jls
+*_audit.jsonl
+logs/
+
+# secrets
+.env
+*.env
+
+# macOS
+.DS_Store
+._*
