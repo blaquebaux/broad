@@ -33,10 +33,29 @@ vol-target that treats a 3x product as 3x risk, not 3x free return.
 - **Thematic rotation** — IVES / GRNY and peers: cross-thematic momentum, tested beta-neutral
   so it is real rotation and not just market beta (and mindful of their short live histories).
 
-Nothing above is implemented or validated. This is the map, not the territory.
+## Research — first pass done
+
+Full detail in [`research/README.md`](research/README.md). The scorecard:
+
+| # | Question | Verdict |
+|---|----------|---------|
+| 1 | Is the TQQQ leverage wrapper worth it? | ❌ **no** — at equal vol it costs ~3% CAGR / 0.12 Sharpe; buy&hold triples the drawdown, not the Sharpe |
+| 2 | The keeper? | ✅ trend+vol-target on **unlevered QQQ**: +0.95 Sharpe, −16% DD (vs −35% buy&hold) |
+| 3 | Thematic ETFs (IVES/GRNY)? | ❌ weak — IVES lagged QQQ (+0.32 vs +1.00); GRNY too short |
+
+**The synthesis:** the distinctive Broad finding is that **TQQQ is not free leverage.** Decay
+is regime-dependent (it *compounded* in the bull, beating naive 3×), but its Sharpe is lower
+(0.82 vs 0.93) and its drawdown catastrophic (−82%); and the decisive equal-vol test shows the
+wrapper costs ~3% CAGR / 0.12 Sharpe at matched risk. The value in broad ETFs is **managing
+exposure, not the wrapper**: trend + vol-target on unlevered QQQ gets Sharpe +0.95 at −16% DD,
+and routing it through TQQQ is worse everywhere. Actionable law (extending the base's
+leverage_decision): *for a governed book, size the unlevered index; never buy-and-hold the
+daily-reset wrapper.* Caveat: the keeper is a managed-equity-beta sleeve (~corr 1 to equities),
+not a diversifier.
 
 ## Status
-**Scaffold.** Engine wired as a submodule; strategy research not yet conducted.
+**Research: first pass complete; managed-exposure keeper + a clear leverage law** (`research/`).
+No live driver; a managed-equity-beta sleeve. Nothing validated to the spine's bar.
 
 ## The Blaque Baux family
 This repo is one sleeve of the **Blaque Baux** family — a single governed engine steered in
@@ -46,7 +65,7 @@ base/blueprint and holds the [full family roster](https://github.com/Carter-Warr
 ## Layout
 ```
 engine/     the Blaque Baux platform (git submodule → Carter-Warrens/blaquebaux)
-research/   Path-A strategy sketches (to come)
+research/   three Path-A sketches (leverage decay, managed-leverage keeper, thematic) + scorecard
 live/       governed live drivers (once a sleeve graduates to paper A/B)
 ```
 
