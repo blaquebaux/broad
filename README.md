@@ -54,8 +54,14 @@ daily-reset wrapper.* Caveat: the keeper is a managed-equity-beta sleeve (~corr 
 not a diversifier.
 
 ## Status
-**Research: first pass complete; managed-exposure keeper + a clear leverage law** (`research/`).
-No live driver; a managed-equity-beta sleeve. Nothing validated to the spine's bar.
+**Research: first pass complete; managed-exposure keeper — standalone driver built** (`research/` +
+`live/`). `live/broad_live.jl` runs it standalone through the engine's governed order path + Layer-3
+safety gate: multi-horizon trend (30/60/120d, long-only) × vol-target on **unlevered QQQ**, capped at
+1× (the leverage law). **Dry-run by default**; graduates to paper with its own isolated keys. A
+managed-equity-beta sleeve; not validated to the spine's bar.
+```bash
+BB_DRYRUN=1 julia --project=engine live/broad_live.jl
+```
 
 ## The Blaque Baux family
 This repo is one sleeve of the **Blaque Baux** family — a single governed engine steered in

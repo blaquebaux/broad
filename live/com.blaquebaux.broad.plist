@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- broad standalone sleeve. DRY-RUN by default (logs the target, places nothing) until
+     ~/.config/blaquebaux/alpaca_broad.env exists. Activate: cp to ~/Library/LaunchAgents/ and launchctl load. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.blaquebaux.broad</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>/Users/malcolmx/blaquebaux-broad/live/run_broad_daily.sh</string></array>
+  <key>StartCalendarInterval</key><array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>28</integer></dict>
+    <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>38</integer></dict>
+  </array>
+  <key>RunAtLoad</key><false/>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string></dict>
+  <key>StandardOutPath</key><string>/Users/malcolmx/blaquebaux-broad/logs/launchd_broad.out</string>
+  <key>StandardErrorPath</key><string>/Users/malcolmx/blaquebaux-broad/logs/launchd_broad.err</string>
+</dict></plist>
