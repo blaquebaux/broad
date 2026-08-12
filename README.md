@@ -63,6 +63,18 @@ managed-equity-beta sleeve; not validated to the spine's bar.
 BB_DRYRUN=1 julia --project=engine live/broad_live.jl
 ```
 
+## About Blaque Baux
+
+**Blaque Baux** is a quantitative research initiative and a subsidiary of **[Carter Warrens](https://carterwarrens.com)**.
+[**BlaqueBaux.com**](https://blaquebaux.com) is the home for the work; the code lives here on GitHub — open to
+study, test, and build bespoke strategies on top of.
+
+Anyone can point an AI at a market. The edge is **understanding what the data actually says — and turning it
+into something you can act on.** We test relentlessly and put most of it *on the record as rejected, with the
+reason*; what survives is built, governed, and validated before it is ever called real. That combination —
+honest research, reproducible evidence, and execution you can trust — is why Carter Warrens leads on
+**strategy and implementation**, not merely uses the tools everyone now has.
+
 ## The Blaque Baux family
 This repo is one sleeve of the **Blaque Baux** family — a single governed engine steered in
 many directions. The [core repo](https://github.com/Carter-Warrens/blaquebaux) is the
