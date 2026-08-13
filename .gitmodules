@@ -1,4 +1,4 @@
 [submodule "engine"]
 	path = engine
-	url = https://github.com/blaque-baux/base.git
+	url = https://github.com/blaquebaux/base.git
 	ignore = dirty

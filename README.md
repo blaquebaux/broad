@@ -2,7 +2,7 @@
 
 **Broad-market and thematic ETF exposure — including leverage — steered by rule, bounded by governance.**
 
-Broad is a member of the Blaque Baux family. The [core repo](https://github.com/blaque-baux/base)
+Broad is a member of the Blaque Baux family. The [core repo](https://github.com/blaquebaux/base)
 is the **engine and blueprint**. Broad points that engine at index and thematic ETFs —
 `IVES` (AI), `GRNY` (Granny Shots), `QQQ` (Nasdaq-100), and `TQQQ` (3x Nasdaq-100) — trading
 broad exposures and the occasional leveraged wrapper, with the engine's governance on the
@@ -13,7 +13,7 @@ order path. Leverage here is a sizing choice the safety gate bounds, never a byp
 > validated. See [LICENSE](LICENSE).
 
 ```bash
-git clone --recursive https://github.com/blaque-baux/broad.git
+git clone --recursive https://github.com/blaquebaux/broad.git
 julia --project=engine -e 'using Pkg; Pkg.instantiate()'   # one-time engine setup
 ```
 
@@ -77,12 +77,12 @@ honest research, reproducible evidence, and execution you can trust — is why C
 
 ## The Blaque Baux family
 This repo is one sleeve of the **Blaque Baux** family — a single governed engine steered in
-many directions. The [core repo](https://github.com/blaque-baux/base) is the
-base/blueprint and holds the [full family roster](https://github.com/blaque-baux/base#the-blaque-baux-family).
+many directions. The [core repo](https://github.com/blaquebaux/base) is the
+base/blueprint and holds the [full family roster](https://github.com/blaquebaux/base#the-blaquebaux-family).
 
 ## Layout
 ```
-engine/     the Blaque Baux platform (git submodule → blaque-baux/base)
+engine/     the Blaque Baux platform (git submodule → blaquebaux/base)
 research/   three Path-A sketches (leverage decay, managed-leverage keeper, thematic) + scorecard
 live/       governed live drivers (once a sleeve graduates to paper A/B)
 ```
