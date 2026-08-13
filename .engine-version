@@ -1,0 +1,6 @@
+# Engine (base) pin
+engine_pin_commit: c4e20f6fc772427eaf32d83069c9c09eb1a542d3
+base_stable_release: v1.0.0
+base_repo: https://github.com/blaquebaux/base
+note: The engine/ submodule is pinned to the commit above. 'base' is tagged v1.0.0 as the stable
+  reference; bump the submodule to a tagged base release deliberately and re-test before deploying.
