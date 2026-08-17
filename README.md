@@ -62,17 +62,19 @@ live) → full managed exposure. Graceful: missing/stale (>7d)/off → full gros
 *reduces* risk. Toggle `BB_BONDS_OVERLAY=0`, tune `BB_REGIME_DERISK`.
 
 **Validated** ([`live/broad_regime_validation.jl`](live/broad_regime_validation.jl)) — causal daily
-walk-forward, net of cost, reusing the real book + the same 63d SPY–IEF regime the bonds driver publishes:
+walk-forward, net of cost, reusing the real book + the same 63d SPY–IEF regime the bonds driver
+publishes, on the **full 2016–2026 SIP history**:
 
 | book | Sharpe | CAGR | vol | maxDD |
 |------|--------|------|-----|-------|
-| FULL (managed gross) | +0.89 | 10.0% | 11.4% | −13% |
-| **OVERLAY (regime de-risk)** | **+0.91** | 8.9% | 9.9% | **−12%** |
+| FULL (managed gross) | +0.94 | 10.7% | 11.5% | −14% |
+| **OVERLAY (regime de-risk)** | **+0.96** | 10.2% | 10.7% | **−14%** |
 
-Slightly better Sharpe, shallower drawdown, 89% of the return retained (de-risked 57% of days). The
-effect is **more muted than [Boom](https://github.com/blaquebaux/boom)'s** — BROAD already
-self-de-risks through its trend signal and vol-target, so the regime overlay adds a smaller *further*
-cushion — but it still earns its place: a guardrail, not an alpha boost.
+Slightly better Sharpe (+0.02), marginally shallower drawdown, 95% of the return retained (de-risked
+32% of days). BROAD is the **only** equity consumer where the overlay survives a full-cycle re-test —
+because it already self-de-risks through its trend signal and vol-target, so the small further trim is
+consistent rather than window-dependent (unlike [Boom](https://github.com/blaquebaux/boom), whose
+apparent benefit was a 2022 artifact). Marginal, but it earns its place: a guardrail, not an alpha boost.
 
 ## Status
 **Research: first pass complete; managed-exposure keeper — standalone driver built + bonds-regime

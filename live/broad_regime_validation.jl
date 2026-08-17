@@ -22,7 +22,7 @@ _cagr(r) = (lvl = cumprod(1 .+ r); lvl[end]^(252 / length(r)) - 1)
 
 function fetch_panel(U, lb = 2600)
     try
-        return panel_at(AlpacaPanelProvider(U; lookback = lb))
+        return panel_at(AlpacaPanelProvider(U; lookback = lb, calendar_days = 4300, feed = "sip"), Dates.today() - Day(30))
     catch e
         m = match(r"only (\d+) common", sprint(showerror, e)); m === nothing && rethrow(e)
         n = parse(Int, m.captures[1]) - 20; (n < 200 || n >= lb) && rethrow(e)
