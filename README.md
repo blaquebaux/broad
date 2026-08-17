@@ -53,14 +53,37 @@ leverage_decision): *for a governed book, size the unlevered index; never buy-an
 daily-reset wrapper.* Caveat: the keeper is a managed-equity-beta sleeve (~corr 1 to equities),
 not a diversifier.
 
+### Bonds-regime overlay — cross-sleeve sizing (validated, on by default)
+
+BROAD consumes the regime read published by [Bonds](https://github.com/blaquebaux/bonds)
+(`~/.config/blaquebaux/bonds_regime.txt`). When the stock-bond correlation is **positive** (bond hedge
+dead — no diversification cushion) BROAD **de-risks its managed gross by ×0.75**; **negative** (hedge
+live) → full managed exposure. Graceful: missing/stale (>7d)/off → full gross; the overlay only ever
+*reduces* risk. Toggle `BB_BONDS_OVERLAY=0`, tune `BB_REGIME_DERISK`.
+
+**Validated** ([`live/broad_regime_validation.jl`](live/broad_regime_validation.jl)) — causal daily
+walk-forward, net of cost, reusing the real book + the same 63d SPY–IEF regime the bonds driver publishes:
+
+| book | Sharpe | CAGR | vol | maxDD |
+|------|--------|------|-----|-------|
+| FULL (managed gross) | +0.89 | 10.0% | 11.4% | −13% |
+| **OVERLAY (regime de-risk)** | **+0.91** | 8.9% | 9.9% | **−12%** |
+
+Slightly better Sharpe, shallower drawdown, 89% of the return retained (de-risked 57% of days). The
+effect is **more muted than [Boom](https://github.com/blaquebaux/boom)'s** — BROAD already
+self-de-risks through its trend signal and vol-target, so the regime overlay adds a smaller *further*
+cushion — but it still earns its place: a guardrail, not an alpha boost.
+
 ## Status
-**Research: first pass complete; managed-exposure keeper — standalone driver built** (`research/` +
-`live/`). `live/broad_live.jl` runs it standalone through the engine's governed order path + Layer-3
-safety gate: multi-horizon trend (30/60/120d, long-only) × vol-target on **unlevered QQQ**, capped at
-1× (the leverage law). **Dry-run by default**; graduates to paper with its own isolated keys. A
-managed-equity-beta sleeve; not validated to the spine's bar.
+**Research: first pass complete; managed-exposure keeper — standalone driver built + bonds-regime
+sizing overlay wired in and validated** (`research/` + `live/`). `live/broad_live.jl` runs it standalone
+through the engine's governed order path + Layer-3 safety gate: multi-horizon trend (30/60/120d,
+long-only) × vol-target on **unlevered QQQ**, capped at 1× (the leverage law), then scaled by the bonds
+regime. **Dry-run by default**; graduates to paper with its own isolated keys. A managed-equity-beta
+sleeve; not validated to the spine's bar.
 ```bash
-BB_DRYRUN=1 julia --project=engine live/broad_live.jl
+BB_DRYRUN=1 julia --project=engine live/broad_live.jl              # prints the managed exposure
+julia --project=engine live/broad_regime_validation.jl            # the overlay-earns-its-place test
 ```
 
 ## About Blaque Baux
@@ -84,7 +107,7 @@ base/blueprint and holds the [full family roster](https://github.com/blaquebaux/
 ```
 engine/     the Blaque Baux platform (git submodule → blaquebaux/base)
 research/   three Path-A sketches (leverage decay, managed-leverage keeper, thematic) + scorecard
-live/       governed live drivers (once a sleeve graduates to paper A/B)
+live/       broad_live.jl (managed QQQ, bonds-regime sizing overlay) + broad_regime_validation.jl + wrapper + plist
 ```
 
 ## License

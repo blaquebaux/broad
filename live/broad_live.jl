@@ -32,21 +32,50 @@ const SYM = "QQQ"
 const UNIVERSE = [SYM]
 const LIVE_SENTINEL = "I_UNDERSTAND_THIS_IS_REAL_MONEY"
 const VOL_TARGET = 0.15
+# --- bonds regime overlay (consumes blaquebaux/bonds' published regime read) -----------------
+# When the stock-bond correlation is POSITIVE the bond hedge is DEAD — a long equity book has no
+# diversification cushion — so de-risk gross. Missing/stale/off -> full gross (only ever reduces risk).
+const REGIME_DERISK   = 0.75
+const REGIME_MAXSTALE = Day(7)
 
 _readf(p) = isfile(p) ? (v = tryparse(Float64, strip(read(p, String))); v === nothing ? NaN : v) : NaN
 _writef(p, x) = (mkpath(dirname(p)); write(p, string(x)))
+
+"Parse blaquebaux/bonds' published regime file (key=value lines). Returns (; ok, hedge_on, corr, asof)."
+function read_bonds_regime(path)
+    isfile(path) || return (; ok = false)
+    d = Dict{String,String}()
+    for ln in eachline(path)
+        s = strip(ln); (isempty(s) || startswith(s, "#")) && continue
+        kv = split(s, "=", limit = 2); length(kv) == 2 && (d[strip(kv[1])] = strip(kv[2]))
+    end
+    ho = get(d, "hedge_on", ""); asof = tryparse(Date, get(d, "asof", ""))
+    (ho in ("0", "1") && asof !== nothing) || return (; ok = false)
+    (; ok = true, hedge_on = ho == "1", corr = tryparse(Float64, get(d, "corr63", "")), asof = asof)
+end
+
+"Gross-exposure multiplier from the bonds regime read (graceful: missing/stale/off -> 1.0)."
+function regime_gross_scale(path; derisk = parse(Float64, get(ENV, "BB_REGIME_DERISK", string(REGIME_DERISK))))
+    get(ENV, "BB_BONDS_OVERLAY", "1") in ("0", "false", "no") && return (1.0, "bonds overlay OFF (full gross)")
+    r = read_bonds_regime(path)
+    r.ok || return (1.0, "no bonds regime signal -> full gross")
+    (Dates.today() - r.asof) > REGIME_MAXSTALE && return (1.0, "bonds regime STALE ($(r.asof)) -> full gross")
+    c = r.corr === nothing ? NaN : round(r.corr, digits = 2)
+    r.hedge_on ? (1.0,    "bond hedge LIVE (neg-corr $c) -> full gross") :
+                 (derisk, "bond hedge DEAD (pos-corr $c) -> de-risk x$derisk")
+end
 function ewma_vol_ann(r; hl = 20)
     isempty(r) && return NaN; lam = 0.5^(1/hl); v = float(r[1])^2
     for t in eachindex(r); v = t == 1 ? float(r[t])^2 : lam*v + (1-lam)*float(r[t])^2; end
     sqrt(max(v, 1e-12)) * sqrt(252)
 end
 
-function broad_target(panel, cap)
+function broad_target(panel, cap; gross_scale = 1.0)
     syms = panel.symbols; R = panel.returns; T = size(R, 1)
     ci = findfirst(==(SYM), syms); q = R[:, ci]; px = panel.prices[ci]
     frac = mean([(prod(1 .+ q[T-h+1:T]) - 1) > 0 ? 1.0 : 0.0 for h in (30, 60, 120)])   # long-only trend fraction
     vol = ewma_vol_ann(q; hl = 20)
-    w = clamp(frac * (VOL_TARGET / max(vol, 1e-6)), 0.0, 1.0)                             # no leverage
+    w = clamp(frac * (VOL_TARGET / max(vol, 1e-6)), 0.0, 1.0) * gross_scale               # no leverage; gross_scale = bonds regime overlay
     (targets = Dict(SYM => round(Float64, w * cap / px)), prices = Dict(SYM => px),
      net = Dict(SYM => w), frac = frac, vol = vol)
 end
@@ -55,15 +84,18 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
               db_path     = get(ENV, "BB_LEDGER_PATH", joinpath(REPO, "alpaca_ledger_broad.sqlite")),
               audit_path  = get(ENV, "BB_AUDIT_PATH",  joinpath(REPO, "alpaca_audit_broad.jsonl")),
               hwm_path    = get(ENV, "BB_HWM_PATH",    joinpath(homedir(), ".config", "blaquebaux", "equity_hwm_broad.txt")),
-              equity_path = get(ENV, "BB_EQUITY_PATH", joinpath(homedir(), ".config", "blaquebaux", "equity_last_broad.txt")))
+              equity_path = get(ENV, "BB_EQUITY_PATH", joinpath(homedir(), ".config", "blaquebaux", "equity_last_broad.txt")),
+              regime_path = get(ENV, "BB_REGIME_PATH", joinpath(homedir(), ".config", "blaquebaux", "bonds_regime.txt")))
     (get(ENV, "ALPACA_KEY_ID", "") == "" || get(ENV, "ALPACA_SECRET_KEY", "") == "") &&
         error("Set ALPACA_KEY_ID and ALPACA_SECRET_KEY (read-only bars are needed even in dry-run).")
     dryrun = get(ENV, "BB_DRYRUN", "") in ("1", "true", "yes")
     if dryrun
         panel = panel_at(AlpacaPanelProvider(UNIVERSE; lookback = 200))
-        bk = broad_target(panel, capital === nothing ? 100_000.0 : capital)
+        rscale, rnote = regime_gross_scale(regime_path)
+        bk = broad_target(panel, capital === nothing ? 100_000.0 : capital; gross_scale = rscale)
         @info "BROAD dry run" asof=panel.asof trend_frac=@sprintf("%.0f%%", 100bk.frac) qqq_vol=@sprintf("%.0f%%", 100bk.vol)
-        println("\n  BROAD managed QQQ exposure: ", @sprintf("%.0f%%", 100*get(bk.net, SYM, 0.0)),
+        println("\n  bonds regime -> ", rnote)
+        println("  BROAD managed QQQ exposure: ", @sprintf("%.0f%%", 100*get(bk.net, SYM, 0.0)),
                 " -> ", Int(get(bk.targets, SYM, 0.0)), " sh @ \$", @sprintf("%.2f", get(bk.prices, SYM, NaN)))
         ok, reasons = preflight(; account_status = "ACTIVE", equity = 100_000.0, hwm = 100_000.0, last_equity = 100_000.0,
             buying_power = 100_000.0, data_fresh = (Dates.today() - panel.asof) <= Day(5), targets = bk.targets, prices = bk.prices, limits = limits)
@@ -79,7 +111,8 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
         acct = account_info(venue); acct === nothing && (alert("ABORT [$mode]: no account (broad)"; level = :critical); return :no_account)
         cap = capital === nothing ? acct.equity : capital; hwm = max(load_hwm(hwm_path), acct.equity); last_eq = _readf(equity_path)
         panel = panel_at(AlpacaPanelProvider(UNIVERSE; lookback = 200)); fresh = (Dates.today() - panel.asof) <= Day(5)
-        bk = broad_target(panel, cap)
+        rscale, rnote = regime_gross_scale(regime_path); @info "bonds regime overlay" note=rnote
+        bk = broad_target(panel, cap; gross_scale = rscale)
         ok, reasons = preflight(; account_status = acct.status, trading_blocked = acct.trading_blocked, account_blocked = acct.account_blocked,
             equity = acct.equity, hwm = hwm, last_equity = last_eq, buying_power = acct.buying_power, data_fresh = fresh, targets = bk.targets, prices = bk.prices, limits = limits)
         save_hwm(hwm, hwm_path); _writef(equity_path, acct.equity)
@@ -89,7 +122,7 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
         ncanc = cancel_all_open!(venue); ncanc > 0 && sleep(2)
         for (sym, qty) in positions(venue, ctrl.account); apply_fill!(ctrl, sym, qty); end
         res = execute_rebalance!(ctrl, ledger; targets = bk.targets, prices = bk.prices, signal_id = "broad",
-            regime = "managed-beta", solve_id = Dates.format(panel.asof, "yyyymmdd"), pool_id = pool, settle_secs = 20)
+            regime = "managed-beta-regx$(round(rscale, digits=2))", solve_id = Dates.format(panel.asof, "yyyymmdd"), pool_id = pool, settle_secs = 20)
         !res.reconciled && (alert("RECONCILE FAILED [$mode] (broad)"; level = :critical); halt!(ctrl, "reconcile mismatch"))
         summary = "[$mode] broad; orders=$(length(res.acks)) fills=$(length(res.fills)) reconciled=$(res.reconciled) equity=$(round(Int, acct.equity))"
         @info "broad_live complete" summary; alert(summary; level = :info); return res.reconciled ? :ok : :reconcile_failed
