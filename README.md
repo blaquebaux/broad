@@ -76,6 +76,16 @@ because it already self-de-risks through its trend signal and vol-target, so the
 consistent rather than window-dependent (unlike [Boom](https://github.com/blaquebaux/boom), whose
 apparent benefit was a 2022 artifact). Marginal, but it earns its place: a guardrail, not an alpha boost.
 
+### Market-regime overlay — declined (redundant with the vol-target)
+
+BROAD was also tested against [benchmark](https://github.com/blaquebaux/benchmark)'s `market_regime.txt`
+and **declined it, on the data** ([`live/broad_market_regime_validation.jl`](live/broad_market_regime_validation.jl)):
+gating the managed book on the market regime *cut* Sharpe (**+0.84→+0.80**) with no drawdown-adjusted
+gain. BROAD already de-risks through its vol-target, and market_regime is itself mostly vol-timing
+(benchmark #3), so the two **overlap** — stacking a second vol-timing overlay just double-counts. The
+bonds overlay (above) stays because it keys off the *stock-bond correlation*, which is orthogonal to
+BROAD's own vol management; market_regime is not.
+
 ## Status
 **Research: first pass complete; managed-exposure keeper — standalone driver built + bonds-regime
 sizing overlay wired in and validated** (`research/` + `live/`). `live/broad_live.jl` runs it standalone
