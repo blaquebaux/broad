@@ -37,6 +37,13 @@ const VOL_TARGET = 0.15
 # diversification cushion — so de-risk gross. Missing/stale/off -> full gross (only ever reduces risk).
 const REGIME_DERISK   = 0.75
 const REGIME_MAXSTALE = Day(7)
+# --- rate-regime overlay (consumes balanced's rate_regime.txt) — OPT-IN ------------------------
+# BROAD is a QQQ growth book; rising rates are a growth headwind. Validation (broad_rate_regime_validation.jl,
+# full 2016-2026 SIP): de-risking when rates rise IMPROVES Sharpe (+0.96->+1.03) and M² (+0.8%->+2.0%) by
+# trimming vol, but cuts 0% off the max drawdown — BROAD's worst DD isn't a rising-rate event, and its own
+# trend+vol-target already self-manages (cf. its declined market_regime). So it FAILS the de-risking bar's
+# drawdown leg and ships OFF; opt in with BB_RATE_OVERLAY=1 for the vol/Sharpe efficiency (no DD insurance).
+const RATE_DERISK = 0.5
 
 _readf(p) = isfile(p) ? (v = tryparse(Float64, strip(read(p, String))); v === nothing ? NaN : v) : NaN
 _writef(p, x) = (mkpath(dirname(p)); write(p, string(x)))
@@ -64,6 +71,28 @@ function regime_gross_scale(path; derisk = parse(Float64, get(ENV, "BB_REGIME_DE
     r.hedge_on ? (1.0,    "bond hedge LIVE (neg-corr $c) -> full gross") :
                  (derisk, "bond hedge DEAD (pos-corr $c) -> de-risk x$derisk")
 end
+
+"Parse balanced's rate_regime file. Returns (; ok, rates_rising, asof)."
+function read_rate_regime(path)
+    isfile(path) || return (; ok = false)
+    d = Dict{String,String}()
+    for ln in eachline(path)
+        s = strip(ln); (isempty(s) || startswith(s, "#")) && continue
+        kv = split(s, "=", limit = 2); length(kv) == 2 && (d[strip(kv[1])] = strip(kv[2]))
+    end
+    rr = get(d, "rates_rising", ""); asof = tryparse(Date, get(d, "asof", ""))
+    (rr in ("0", "1") && asof !== nothing) || return (; ok = false)
+    (; ok = true, rates_rising = rr == "1", asof = asof)
+end
+
+"Gross multiplier from balanced's rate regime — OPT-IN (default OFF; graceful: missing/stale -> 1.0)."
+function rate_gross_scale(path; derisk = parse(Float64, get(ENV, "BB_RATE_DERISK", string(RATE_DERISK))))
+    get(ENV, "BB_RATE_OVERLAY", "0") in ("0", "false", "no") && return (1.0, "rate overlay OFF by default (validation: +Sharpe/+M² but 0% DD cut -> opt-in)")
+    r = read_rate_regime(path)
+    r.ok || return (1.0, "no rate regime signal -> full gross")
+    (Dates.today() - r.asof) > REGIME_MAXSTALE && return (1.0, "rate regime STALE ($(r.asof)) -> full gross")
+    r.rates_rising ? (derisk, "rates RISING (growth headwind) -> de-risk x$derisk") : (1.0, "rates falling -> full gross")
+end
 function ewma_vol_ann(r; hl = 20)
     isempty(r) && return NaN; lam = 0.5^(1/hl); v = float(r[1])^2
     for t in eachindex(r); v = t == 1 ? float(r[t])^2 : lam*v + (1-lam)*float(r[t])^2; end
@@ -85,16 +114,19 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
               audit_path  = get(ENV, "BB_AUDIT_PATH",  joinpath(REPO, "alpaca_audit_broad.jsonl")),
               hwm_path    = get(ENV, "BB_HWM_PATH",    joinpath(homedir(), ".config", "blaquebaux", "equity_hwm_broad.txt")),
               equity_path = get(ENV, "BB_EQUITY_PATH", joinpath(homedir(), ".config", "blaquebaux", "equity_last_broad.txt")),
-              regime_path = get(ENV, "BB_REGIME_PATH", joinpath(homedir(), ".config", "blaquebaux", "bonds_regime.txt")))
+              regime_path = get(ENV, "BB_REGIME_PATH", joinpath(homedir(), ".config", "blaquebaux", "bonds_regime.txt")),
+              rate_regime_path = get(ENV, "BB_RATE_REGIME_PATH", joinpath(homedir(), ".config", "blaquebaux", "rate_regime.txt")))
     (get(ENV, "ALPACA_KEY_ID", "") == "" || get(ENV, "ALPACA_SECRET_KEY", "") == "") &&
         error("Set ALPACA_KEY_ID and ALPACA_SECRET_KEY (read-only bars are needed even in dry-run).")
     dryrun = get(ENV, "BB_DRYRUN", "") in ("1", "true", "yes")
     if dryrun
         panel = panel_at(AlpacaPanelProvider(UNIVERSE; lookback = 200))
         rscale, rnote = regime_gross_scale(regime_path)
-        bk = broad_target(panel, capital === nothing ? 100_000.0 : capital; gross_scale = rscale)
+        ratescale, ratenote = rate_gross_scale(rate_regime_path)
+        bk = broad_target(panel, capital === nothing ? 100_000.0 : capital; gross_scale = rscale * ratescale)
         @info "BROAD dry run" asof=panel.asof trend_frac=@sprintf("%.0f%%", 100bk.frac) qqq_vol=@sprintf("%.0f%%", 100bk.vol)
         println("\n  bonds regime -> ", rnote)
+        println("  rate regime  -> ", ratenote)
         println("  BROAD managed QQQ exposure: ", @sprintf("%.0f%%", 100*get(bk.net, SYM, 0.0)),
                 " -> ", Int(get(bk.targets, SYM, 0.0)), " sh @ \$", @sprintf("%.2f", get(bk.prices, SYM, NaN)))
         ok, reasons = preflight(; account_status = "ACTIVE", equity = 100_000.0, hwm = 100_000.0, last_equity = 100_000.0,
@@ -112,7 +144,8 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
         cap = capital === nothing ? acct.equity : capital; hwm = max(load_hwm(hwm_path), acct.equity); last_eq = _readf(equity_path)
         panel = panel_at(AlpacaPanelProvider(UNIVERSE; lookback = 200)); fresh = (Dates.today() - panel.asof) <= Day(5)
         rscale, rnote = regime_gross_scale(regime_path); @info "bonds regime overlay" note=rnote
-        bk = broad_target(panel, cap; gross_scale = rscale)
+        ratescale, ratenote = rate_gross_scale(rate_regime_path); @info "rate regime overlay" note=ratenote
+        bk = broad_target(panel, cap; gross_scale = rscale * ratescale)
         ok, reasons = preflight(; account_status = acct.status, trading_blocked = acct.trading_blocked, account_blocked = acct.account_blocked,
             equity = acct.equity, hwm = hwm, last_equity = last_eq, buying_power = acct.buying_power, data_fresh = fresh, targets = bk.targets, prices = bk.prices, limits = limits)
         save_hwm(hwm, hwm_path); _writef(equity_path, acct.equity)
@@ -122,7 +155,7 @@ function main(; capital = nothing, pool = "us", limits::SafetyLimits = SafetyLim
         ncanc = cancel_all_open!(venue); ncanc > 0 && sleep(2)
         for (sym, qty) in positions(venue, ctrl.account); apply_fill!(ctrl, sym, qty); end
         res = execute_rebalance!(ctrl, ledger; targets = bk.targets, prices = bk.prices, signal_id = "broad",
-            regime = "managed-beta-regx$(round(rscale, digits=2))", solve_id = Dates.format(panel.asof, "yyyymmdd"), pool_id = pool, settle_secs = 20)
+            regime = "managed-beta-bondsx$(round(rscale, digits=2))-ratex$(round(ratescale, digits=2))", solve_id = Dates.format(panel.asof, "yyyymmdd"), pool_id = pool, settle_secs = 20)
         !res.reconciled && (alert("RECONCILE FAILED [$mode] (broad)"; level = :critical); halt!(ctrl, "reconcile mismatch"))
         summary = "[$mode] broad; orders=$(length(res.acks)) fills=$(length(res.fills)) reconciled=$(res.reconciled) equity=$(round(Int, acct.equity))"
         @info "broad_live complete" summary; alert(summary; level = :info); return res.reconciled ? :ok : :reconcile_failed

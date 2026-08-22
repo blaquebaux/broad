@@ -86,6 +86,26 @@ gain. BROAD already de-risks through its vol-target, and market_regime is itself
 bonds overlay (above) stays because it keys off the *stock-bond correlation*, which is orthogonal to
 BROAD's own vol management; market_regime is not.
 
+### Rate-regime overlay — validated, opt-in (Sharpe/M² up, but no drawdown help)
+
+BROAD is a pure long-duration **growth** book (QQQ), so it's the natural consumer of
+[balanced](https://github.com/blaquebaux/balanced)'s `rate_regime.txt` — the hypothesis being that rising
+rates are a growth headwind that *leads* the selloff BROAD's reactive trend-following lags. Tested causally
+([`live/broad_rate_regime_validation.jl`](live/broad_rate_regime_validation.jl), full 2016–2026 SIP): de-risking
+gross ×0.5 when rates are rising:
+
+| book | Sharpe | CAGR | vol | maxDD | M² exc |
+|------|--------|------|-----|-------|--------|
+| FULL (managed gross) | +0.96 | 10.9% | 11.5% | −14% | +0.8% |
+| + rate overlay | **+1.03** | 9.4% | 9.2% | **−14%** | **+2.0%** |
+
+The rate signal **improves risk-adjusted return** (Sharpe +0.96→+1.03, M² +0.8%→+2.0%, keeps 86% of return)
+by trimming vol in rising-rate stretches — but it cuts **0% off the max drawdown** (BROAD's worst DD isn't a
+rising-rate event), so it **fails the de-risking bar's drawdown leg**. Same lesson as market_regime: BROAD
+already self-manages via trend + vol-target, so even the *right* style signal can't earn a *default* place.
+Ships **OFF**; opt in with `BB_RATE_OVERLAY=1` for the vol/Sharpe efficiency (no drawdown insurance). The
+signal stays published by balanced for a book that doesn't already self-de-risk.
+
 ## Status
 **Research: first pass complete; managed-exposure keeper — standalone driver built + bonds-regime
 sizing overlay wired in and validated** (`research/` + `live/`). `live/broad_live.jl` runs it standalone
@@ -119,7 +139,8 @@ base/blueprint and holds the [full family roster](https://github.com/blaquebaux/
 ```
 engine/     the Blaque Baux platform (git submodule → blaquebaux/base)
 research/   three Path-A sketches (leverage decay, managed-leverage keeper, thematic) + scorecard
-live/       broad_live.jl (managed QQQ, bonds-regime sizing overlay) + broad_regime_validation.jl + wrapper + plist
+live/       broad_live.jl (managed QQQ; bonds-regime ON, rate-regime opt-in) + broad_regime_validation.jl
+            + broad_market_regime_validation.jl (declined) + broad_rate_regime_validation.jl (opt-in) + wrapper + plist
 ```
 
 ## License
